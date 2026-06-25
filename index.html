@@ -95,6 +95,16 @@ textarea.memo-input{width:100%;border:none;font-size:13px;color:#1c1c1e;resize:n
 .detail-row{padding:11px 14px;border-bottom:0.5px solid #f0f0f0;font-size:13px;display:flex;gap:8px;}
 .detail-row:last-child{border-bottom:none;}
 .vacation-banner{background:#eef0f7;border-bottom:1px solid #c5cbde;padding:6px 14px;font-size:12px;color:#3d4d6e;display:flex;align-items:center;gap:6px;}
+.backup-wrap{display:none;background:rgba(0,0,0,.4);position:fixed;inset:0;z-index:50;align-items:flex-end;justify-content:center;}
+.backup-wrap.open{display:flex;}
+.backup-sheet{background:#f5f5f7;border-radius:20px 20px 0 0;padding:20px 16px 36px;width:100%;max-width:520px;}
+.backup-sheet h3{font-size:16px;font-weight:600;margin-bottom:4px;text-align:center;}
+.backup-sheet p{font-size:12px;color:#888;text-align:center;margin-bottom:18px;}
+.backup-btn{width:100%;padding:14px;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:10px;border:none;display:flex;align-items:center;justify-content:center;gap:8px;}
+.backup-btn.export{background:#5D688A;color:#fff;}
+.backup-btn.import{background:#FFF2EF;color:#5D688A;border:1px solid #C8D0E4;}
+.backup-btn.cancel{background:#e9e9eb;color:#444;font-weight:500;}
+.backup-btn:active{opacity:.85;}
 </style>
 </head>
 <body>
@@ -118,7 +128,10 @@ textarea.memo-input{width:100%;border:none;font-size:13px;color:#1c1c1e;resize:n
         <div class="leg-item"><div class="leg-dot" style="background:#F7A5A5"></div>HR</div>
         <div class="leg-item"><div class="leg-dot" style="background:#8C96B5"></div>CW</div>
       </div>
-      <button class="vacation-toggle" id="vacBtn" onclick="toggleVacation()">☀️ 방학 모드</button>
+      <div style="display:flex;gap:6px">
+        <button class="vacation-toggle" id="vacBtn" onclick="toggleVacation()">☀️ 방학</button>
+        <button class="vacation-toggle" onclick="openBackup()">💾 백업</button>
+      </div>
     </div>
   </div>
 
@@ -255,6 +268,19 @@ textarea.memo-input{width:100%;border:none;font-size:13px;color:#1c1c1e;resize:n
         <div class="detail-row"><span style="width:18px;flex-shrink:0">🔁</span><span id="dRepeat"></span></div>
         <div class="detail-row" id="dMemoRow" style="display:none"><span style="width:18px;flex-shrink:0">📝</span><span id="dMemo"></span></div>
       </div>
+    </div>
+  </div>
+
+  <!-- 백업/복원 시트 -->
+  <div class="backup-wrap" id="backupWrap" onclick="closeBackup()">
+    <div class="backup-sheet" onclick="event.stopPropagation()">
+      <h3>💾 백업 / 복원</h3>
+      <p>데이터를 파일로 저장하거나 불러올 수 있어요</p>
+      <button class="backup-btn export" onclick="exportBackup()">⬇️ 지금 데이터 백업 (파일 저장)</button>
+      <button class="backup-btn import" onclick="document.getElementById('importFile').click()">⬆️ 백업 파일로 복원</button>
+      <input type="file" id="importFile" accept=".json" style="display:none" onchange="importBackup(this)">
+      <button class="backup-btn cancel" onclick="closeBackup()">닫기</button>
+      <div id="backupMsg" style="text-align:center;font-size:12px;margin-top:10px;color:#5D688A;min-height:18px"></div>
     </div>
   </div>
 </div>
@@ -618,6 +644,43 @@ function editFromDetail(){
 }
 
 buildTimes();buildColors(0);render();
+
+function openBackup(){document.getElementById('backupWrap').classList.add('open');document.getElementById('backupMsg').textContent='';}
+function closeBackup(){document.getElementById('backupWrap').classList.remove('open');}
+
+function exportBackup(){
+  const data={version:1,exportedAt:new Date().toISOString(),events};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  const date=new Date();
+  const fname=`cwhr_backup_${date.getFullYear()}${String(date.getMonth()+1).padStart(2,'0')}${String(date.getDate()).padStart(2,'0')}.json`;
+  a.href=url;a.download=fname;a.click();
+  URL.revokeObjectURL(url);
+  document.getElementById('backupMsg').textContent='✅ 백업 파일이 저장됐어요!';
+}
+
+function importBackup(input){
+  const file=input.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const data=JSON.parse(e.target.result);
+      if(!data.events||!Array.isArray(data.events))throw new Error('형식 오류');
+      if(!confirm(`백업 파일에 일정 ${data.events.length}개가 있어요.\n현재 데이터를 덮어쓸까요?`))return;
+      events=data.events;
+      nid=Math.max(0,...events.map(ev=>ev.id))+1;
+      saveEventsLocal();render();
+      document.getElementById('backupMsg').textContent=`✅ ${data.events.length}개 일정을 복원했어요!`;
+    }catch(err){
+      document.getElementById('backupMsg').style.color='#c0392b';
+      document.getElementById('backupMsg').textContent='❌ 파일을 읽을 수 없어요. 올바른 백업 파일인지 확인해 주세요.';
+    }
+    input.value='';
+  };
+  reader.readAsText(file);
+}
 </script>
 </body>
 </html>
